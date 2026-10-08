@@ -60,6 +60,7 @@ Restart=on-failure
 RestartSec=2
 Environment=HOST=$HOST
 Environment=PORT=$PORT
+Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=-$ROOT/radar.env
 
 [Install]
@@ -85,20 +86,32 @@ else
 fi
 
 ready=0
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  if python3 - "$PORT" <<'PY'
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  if python3 - "$PORT" >/dev/null 2>&1 <<'PY'
 import sys, urllib.request
-urllib.request.urlopen(f"http://127.0.0.1:{sys.argv[1]}/api/health", timeout=2).read()
+try:
+    with urllib.request.urlopen(f"http://127.0.0.1:{sys.argv[1]}/api/health", timeout=2) as response:
+        sys.exit(0 if response.status == 200 else 1)
+except Exception:
+    sys.exit(1)
 PY
   then
     ready=1
     break
   fi
-  sleep 0.3
+  sleep 0.5
 done
 
 if [ "$ready" -ne 1 ]; then
-  echo "服务没有在端口 $PORT 上起来。可查看 data/server.log"
+  echo "服务没有在端口 $PORT 上起来。"
+  if command -v systemctl >/dev/null 2>&1 && systemctl cat xuanbi >/dev/null 2>&1; then
+    systemctl status xuanbi --no-pager || true
+    journalctl -u xuanbi -n 40 --no-pager || true
+  fi
+  if [ -f "$ROOT/data/server.log" ]; then
+    echo "---- data/server.log ----"
+    tail -n 40 "$ROOT/data/server.log" || true
+  fi
   exit 1
 fi
 
