@@ -158,19 +158,55 @@ def clear_session(conn, handler):
         conn.commit()
 
 
+def header_hosts(value):
+    return [part.strip().lower() for part in (value or "").split(",") if part.strip()]
+
+
+def hostname_only(value):
+    value = value.strip().lower()
+    if value.startswith("[") and "]" in value:
+        return value[1:value.index("]")]
+    if value.count(":") == 1:
+        return value.rsplit(":", 1)[0]
+    return value
+
+
+def loopback_name(value):
+    return hostname_only(value) in {"127.0.0.1", "localhost", "::1"}
+
+
+def request_hosts(handler):
+    hosts = []
+    for name in ("X-Forwarded-Host", "X-Host", "Host"):
+        hosts.extend(header_hosts(handler.headers.get(name)))
+    return hosts
+
+
 def public_host(handler):
-    forwarded = handler.headers.get("X-Forwarded-Host")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return handler.headers.get("Host") or ""
+    hosts = request_hosts(handler)
+    for host in hosts:
+        if not loopback_name(host):
+            return host
+    return hosts[0] if hosts else ""
 
 
 def same_origin(handler):
     origin = handler.headers.get("Origin")
     if not origin:
         return True
-    host = public_host(handler)
-    return origin in {f"http://{host}", f"https://{host}"}
+    parsed = urlparse(origin)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+    origin_name = parsed.hostname.lower()
+    hosts = request_hosts(handler)
+    public = [host for host in hosts if not loopback_name(host)]
+    for host in public or hosts:
+        if hostname_only(host) == origin_name:
+            return True
+    # 宝塔反代常把 Host 改成 127.0.0.1，浏览器带来的域名对不上。
+    # 这时请求只来自本机 Nginx，登录口令本身仍由 SameSite=Lax 保护。
+    peer = handler.client_address[0] if handler.client_address else ""
+    return bool(hosts) and not public and peer in {"127.0.0.1", "::1"}
 
 
 def https_request(handler):
