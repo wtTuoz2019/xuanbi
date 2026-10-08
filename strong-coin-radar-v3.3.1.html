@@ -54,20 +54,42 @@ button,input,select{font:inherit}.app-shell{min-height:100vh;display:grid;grid-t
 @media(max-width:900px){.major-grid{grid-template-columns:1fr}.major-overview{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:520px){.major-overview{grid-template-columns:1fr 1fr 1fr}.major-overview-item{padding:9px}.major-overview-item b{font-size:17px}.major-simple-head{padding:12px}.major-verdict{padding:12px}.major-simple-grid{padding-left:12px;padding-right:12px}.major-explain,.major-next{margin-left:12px;margin-right:12px}.major-tech{padding:0 12px}}
 
+body.locked-out .app-shell{visibility:hidden}
+.auth-gate{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(circle at 80% 0%,#102330 0,#071018 42%,#050b10 100%)}
+.auth-gate[hidden]{display:none !important}
+.auth-card{width:min(380px,100%);padding:22px;border:1px solid var(--line);border-radius:16px;background:#0d1822;box-shadow:var(--shadow)}
+.auth-brand{font-size:18px;font-weight:800;margin-bottom:14px}
+.auth-card b{display:block;font-size:16px}
+.auth-card small{display:block;margin-top:6px;color:#8194a3;font-size:12px;line-height:1.5}
+.auth-card input{width:100%;height:40px;margin-top:10px;border:1px solid var(--line);border-radius:10px;background:#071018;color:#eaf2f8;padding:0 12px}
+#accountPassword2[hidden]{display:none !important}
+.auth-submit{width:100%;justify-content:center;margin-top:14px;height:40px}
+.auth-switch{width:100%;margin-top:10px;border:0;background:transparent;color:#75a7ff;cursor:pointer;font-size:12px}
+#accountError{color:#ff8b98;min-height:18px}
 .account-wrap{position:relative}
 .account-toggle{height:36px;max-width:148px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--line);border-radius:8px;background:#0a151d;color:#dce9f1;padding:0 12px;cursor:pointer;font-size:12px}
-.account-pop{position:absolute;right:0;top:44px;width:272px;z-index:40;padding:12px;border:1px solid var(--line);border-radius:12px;background:#0d1822;box-shadow:var(--shadow)}
-.account-pop[hidden],#accountGuest[hidden],#accountUser[hidden]{display:none !important}
+.account-toggle[hidden],.account-pop[hidden]{display:none !important}
+.account-pop{position:absolute;right:0;top:44px;width:240px;z-index:40;padding:12px;border:1px solid var(--line);border-radius:12px;background:#0d1822;box-shadow:var(--shadow)}
 .account-pop b{font-size:12px}
-.account-pop small,.account-note{display:block;margin-top:4px;color:#8194a3;font-size:10px;line-height:1.5}
-.account-pop input{width:100%;height:34px;margin-top:8px;border:1px solid var(--line);border-radius:8px;background:#071018;color:#eaf2f8;padding:0 10px}
+.account-pop small{display:block;margin-top:4px;color:#8194a3;font-size:10px;line-height:1.5}
 .account-actions{display:flex;gap:6px;margin-top:8px}
 .account-actions .inline-btn{flex:1;justify-content:center}
-#accountError{color:#ff8b98;min-height:16px}
-.nav-item.needs-login{opacity:.62}
 </style>
 </head>
-<body>
+<body class="locked-out">
+  <div id="authGate" class="auth-gate">
+    <form id="authForm" class="auth-card" autocomplete="on">
+      <div class="auth-brand">强势币雷达</div>
+      <b id="accountTitle">登录</b>
+      <small id="accountGuide">使用已注册的用户名和密码登录。</small>
+      <input id="accountName" maxlength="32" autocomplete="username" placeholder="用户名" />
+      <input id="accountPassword" maxlength="72" type="password" autocomplete="current-password" placeholder="密码，至少 6 位" />
+      <input id="accountPassword2" maxlength="72" type="password" autocomplete="new-password" placeholder="再输入一次密码" hidden />
+      <button type="submit" id="accountSubmit" class="primary-btn auth-submit">登录</button>
+      <button type="button" id="accountSwitch" class="auth-switch">没有账号，去注册</button>
+      <small id="accountError"></small>
+    </form>
+  </div>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
@@ -107,24 +129,11 @@ button,input,select{font:inherit}.app-shell{min-height:100vh;display:grid;grid-t
         </div>
         <div class="top-actions">
           <div class="account-wrap">
-            <button type="button" id="accountToggle" class="account-toggle">登录</button>
+            <button type="button" id="accountToggle" class="account-toggle" hidden>账户</button>
             <div id="accountPop" class="account-pop" hidden>
-              <b id="accountTitle">客户账户</b>
-              <div id="accountGuest">
-                <small id="accountGuide">没有账号先点注册。用户名至少 2 位，密码至少 6 位。已有账号直接点登录。</small>
-                <input id="accountName" maxlength="32" autocomplete="username" placeholder="用户名" />
-                <input id="accountPassword" maxlength="72" type="password" autocomplete="current-password" placeholder="密码，至少 6 位" />
-                <div class="account-actions">
-                  <button type="button" id="accountLogin" class="inline-btn primary">登录</button>
-                  <button type="button" id="accountRegister" class="inline-btn">注册</button>
-                </div>
-              </div>
-              <div id="accountUser" hidden>
-                <b id="accountUserName"></b>
-                <small id="accountUserMeta"></small>
-                <div class="account-actions"><button type="button" id="accountLogout" class="inline-btn">退出</button></div>
-              </div>
-              <small id="accountError"></small>
+              <b id="accountUserName"></b>
+              <small id="accountUserMeta"></small>
+              <div class="account-actions"><button type="button" id="accountLogout" class="inline-btn">退出</button></div>
             </div>
           </div>
           <div class="lang-switch" role="group" aria-label="Language">
@@ -653,7 +662,9 @@ function addAlert(c,tf,assessment=assessOpportunity(c,tf)){if(!assessment.ok)ret
 function maybeAddAlert(c,tf){const a=assessOpportunity(c,tf);if(a.ok)addAlert(c,tf,a);return a}
 function evaluateAlerts(){if(!$('breakoutAlerts')?.checked)return;marketData.filter(c=>c.score>=75&&c.rvol>=1.5&&c.change>=3).slice(0,24).forEach(c=>{if(c.break1m?.confirmed)maybeAddAlert(c,'1m');if(c.break5m?.confirmed)maybeAddAlert(c,'5m')})}
 function scheduleLiveRender(){if(liveRenderTimer)return;liveRenderTimer=setTimeout(()=>{liveRenderTimer=null;renderTable();renderSignals();renderPaperTrade()},700)}
+function stopLiveBreakout(){clearTimeout(wsReconnectTimer);wsReconnectTimer=null;if(marketWs){try{marketWs.onclose=null;marketWs.close()}catch{} marketWs=null}wsConnected=false}
 function startLiveBreakout(){
+  if(!currentUser){stopLiveBreakout();return}
   clearTimeout(wsReconnectTimer); if(marketWs){try{marketWs.onclose=null;marketWs.close()}catch{} marketWs=null}
   const reverseTop=[...marketData].sort((a,b)=>(b.reverseScore||0)-(a.reverseScore||0)).slice(0,12).map(c=>c.symbol);
   const coinMap=new Map();const livePriority=[...Object.keys(paperAccount.positions),...(paperAccount.whitelist||[]),...watchlist,...MAJOR_SYMBOLS,...marketData.slice(0,14).map(c=>c.symbol),...reverseTop];livePriority.forEach(sym=>{const c=marketData.find(x=>x.symbol===sym);if(c&&!coinMap.has(sym))coinMap.set(sym,c)});const coins=[...coinMap.values()].slice(0,32); if(!coins.length||!('WebSocket'in window))return;
@@ -817,6 +828,7 @@ function renderStrategyLeaderboard(){
 }
 
 async function loadMarket(){
+  if(!currentUser)return;
   scannerState='loading';lastLoadOk=null;renderRuntimeStatus();$('refreshBtn').disabled=true;$('connectionText').textContent=t('connecting');$('connectionDot').className='dot';
   try{const rows=await fetchJson(`${BINANCE_API}/api/v3/ticker/24hr`);const all=rows.filter(x=>x.symbol?.endsWith('USDT')&&!excluded(x.symbol)).map(x=>({symbol:x.symbol,price:+x.lastPrice,change:+x.priceChangePercent,quoteVolume:+x.quoteVolume,high:+x.highPrice,low:+x.lowPrice,count:+x.count,rvol:1,hourMomentum:0,news:[],newsCount:0,newsTone:'none'})).filter(x=>x.price>0).map(x=>({...x,highProximity:x.high>0?x.price/x.high:0,lowProximity:x.low>0?x.low/x.price:0,rangePct:x.low>0?(x.high/x.low-1)*100:0}));const candidates=all.filter(x=>x.quoteVolume>1e6).sort((a,b)=>b.quoteVolume-a.quoteVolume).slice(0,32),reverseCandidates=all.filter(x=>x.quoteVolume>1e6).sort((a,b)=>a.change-b.change).slice(0,10);reverseCandidates.forEach(x=>{if(!candidates.some(c=>c.symbol===x.symbol))candidates.push(x)});const mustTrack=new Set([...Object.keys(paperAccount.positions),...watchlist,...(paperAccount.whitelist||[]),...MAJOR_SYMBOLS]);all.forEach(x=>{if(mustTrack.has(x.symbol)&&!candidates.some(c=>c.symbol===x.symbol))candidates.push(x)});marketData=(await hydrateSignals(candidates)).sort((a,b)=>b.score-a.score);lastLoadOk=true;scannerState='ready';lastDataUpdatedAt=new Date();lastBinanceError='';updateConnectionUI(true);fundingLoadOk=null;void refreshFundingData();await loadNews();evaluateAlerts();evaluatePaperTrading();startLiveBreakout()}
   catch(e){console.warn(e);marketData=[];matchedNews=[];lastLoadOk=false;scannerState='error';if(!lastBinanceError)lastBinanceError=String(e?.message||e||'Binance unavailable');updateConnectionUI(false)}
@@ -840,8 +852,8 @@ function renderAll(){renderMetrics();renderTable();renderWatchlist();renderRunti
 
 function resetFilters(){$('minGain').value=3;$('minRvol').value=1.2;$('minVolume').value=5;$('rowCount').value=20;$('searchInput').value='';renderTable();renderRuntimeStatus();scheduleUserSync()}
 function activateTab(name){document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));const panel=$(name+'Tab');if(panel)panel.classList.add('active');if(name==='leaderboard'&&currentUser&&COMMUNITY_API&&Date.now()-communityUpdatedAt>60000)void refreshCommunityLeaderboard(false)}
-function setupTabs(){document.querySelectorAll('.nav-item').forEach(btn=>btn.addEventListener('click',ev=>{const tab=btn.dataset.tab;if(AUTH_TABS.has(tab)&&!currentUser){ev.stopPropagation();openLogin(lang==='en'?'Sign in or register before opening this section.':'这个模块按客户分开保存，请先登录或注册。',tab);return}activateTab(tab)}))}
-function setupAutoRefresh(){clearInterval(autoTimer);autoTimer=null;nextRefreshAt=null;if($('autoRefresh').checked){nextRefreshAt=Date.now()+60000;autoTimer=setInterval(loadMarket,60000)}renderRuntimeStatus()}
+function setupTabs(){document.querySelectorAll('.nav-item').forEach(btn=>btn.addEventListener('click',()=>{if(!currentUser)return;activateTab(btn.dataset.tab)}))}
+function setupAutoRefresh(){clearInterval(autoTimer);autoTimer=null;nextRefreshAt=null;if(currentUser&&$('autoRefresh')?.checked){nextRefreshAt=Date.now()+60000;autoTimer=setInterval(loadMarket,60000)}renderRuntimeStatus()}
 function renderNotificationState(){if(!$('notificationState'))return;if(!('Notification'in window)){$('notificationState').textContent=t('notifyDenied');return}$('notificationState').textContent=Notification.permission==='granted'?t('notifyGranted'):t('notifyDenied')}
 async function requestNotify(){if(!('Notification'in window)){renderNotificationState();return}try{await Notification.requestPermission()}catch{}renderNotificationState()}
 
@@ -901,11 +913,21 @@ async function runBacktest(){
 function setMetric(id,text,val=null){const el=$(id);el.textContent=text;el.classList.remove('positive-text','negative-text');if(val!==null)el.classList.add(val>=0?'positive-text':'negative-text')}
 
 
-const AUTH_TABS = new Set(['watchlist','signals','paper','leaderboard','backtest','settings']);
-let currentUser = null, hydratingUser = false, userSyncTimer = null, pendingAuthTab = null, loginPromptLock = false;
-function requireLogin(){if(currentUser)return true;openLogin(lang==='en'?'Sign in or register before using this.':'请先登录或注册。这项内容按客户分开保存。');return false}
-function openLogin(message,tab){pendingAuthTab=tab||null;loginPromptLock=true;const pop=$('accountPop');if(pop)pop.hidden=false;if($('accountError'))$('accountError').textContent=message||'';showToast(lang==='en'?'Sign in required':'请先登录',message||'');$('accountName')?.focus();setTimeout(()=>{loginPromptLock=false},0)}
-function leavePrivateTab(){const active=document.querySelector('.nav-item.active');if(active&&AUTH_TABS.has(active.dataset.tab))activateTab('scanner')}
+let currentUser = null, hydratingUser = false, userSyncTimer = null, authMode = 'login';
+function requireLogin(){return !!currentUser}
+function setAuthMode(mode){
+  authMode=mode==='register'?'register':'login';
+  const zh=lang!=='en', reg=authMode==='register';
+  if($('accountPassword2'))$('accountPassword2').hidden=!reg;
+  if($('accountTitle'))$('accountTitle').textContent=reg?(zh?'注册':'Register'):(zh?'登录':'Sign in');
+  if($('accountSubmit'))$('accountSubmit').textContent=reg?(zh?'注册':'Register'):(zh?'登录':'Sign in');
+  if($('accountSwitch'))$('accountSwitch').textContent=reg?(zh?'已有账号，去登录':'Already registered? Sign in'):(zh?'没有账号，去注册':'No account? Register');
+  if($('accountGuide'))$('accountGuide').textContent=reg?(zh?'用户名至少 2 位，密码至少 6 位，两次密码需要一致。':'Username at least 2 characters. Password at least 6, entered twice.'):(zh?'使用已注册的用户名和密码登录。':'Sign in with your username and password.');
+  if($('accountName'))$('accountName').placeholder=zh?'用户名':'Username';
+  if($('accountPassword')){$('accountPassword').placeholder=zh?'密码，至少 6 位':'Password, at least 6 characters';$('accountPassword').autocomplete=reg?'new-password':'current-password'}
+  if($('accountPassword2'))$('accountPassword2').placeholder=zh?'再输入一次密码':'Confirm password';
+  if($('accountError'))$('accountError').textContent='';
+}
 
 function scheduleUserSync(){
   if(hydratingUser||!currentUser)return;
@@ -1007,41 +1029,33 @@ async function refreshSession(){
   currentUser=j.user||null;
 }
 function renderAccount(){
-  const toggle=$('accountToggle');if(!toggle)return;
-  const zh=lang!=='en', guest=$('accountGuest'), userBox=$('accountUser');
-  $('accountTitle').textContent=zh?'客户账户':'Customer account';
+  const zh=lang!=='en';
+  document.body.classList.toggle('locked-out',!currentUser);
+  if($('authGate'))$('authGate').hidden=!!currentUser;
+  const toggle=$('accountToggle');
+  if(toggle)toggle.hidden=!currentUser;
   if($('accountSettingTitle'))$('accountSettingTitle').textContent=zh?'客户账户':'Customer account';
   if(currentUser){
     const name=currentUser.displayName||currentUser.username;
-    toggle.textContent=name;
-    guest.hidden=true;userBox.hidden=false;
-    $('accountUserName').textContent=name;
-    $('accountUserMeta').textContent=zh?'关注、模拟账户、提醒、筛选和策略只属于这个客户。':'Watchlist, paper account, alerts, filters and strategy belong to this customer.';
-    $('accountLogout').textContent=zh?'退出':'Sign out';
-    if($('accountSettingHint'))$('accountSettingHint').textContent=zh?`当前客户：${name}。下面的设置、关注和模拟账户只保存在这个客户名下。`:`Signed in as ${name}. Settings, watchlist and the paper account below belong to this customer.`;
-    if($('accountGuide'))$('accountGuide').textContent='';
+    if(toggle)toggle.textContent=name;
+    if($('accountUserName'))$('accountUserName').textContent=name;
+    if($('accountUserMeta'))$('accountUserMeta').textContent=zh?'这个客户的数据已分开保存。':'This customer’s data is stored separately.';
+    if($('accountLogout'))$('accountLogout').textContent=zh?'退出':'Sign out';
+    if($('accountSettingHint'))$('accountSettingHint').textContent=zh?`当前客户：${name}。下面的设置只保存在这个客户名下。`:`Signed in as ${name}. Settings below belong to this customer.`;
   }else{
-    toggle.textContent=zh?'登录':'Sign in';
-    guest.hidden=false;userBox.hidden=true;
-    $('accountLogin').textContent=zh?'登录':'Sign in';
-    $('accountRegister').textContent=zh?'注册':'Register';
-    $('accountName').placeholder=zh?'用户名':'Username';
-    $('accountPassword').placeholder=zh?'密码，至少 6 位':'Password, at least 6 characters';
-    if($('accountGuide'))$('accountGuide').textContent=zh?'没有账号先点注册。用户名至少 2 位，密码至少 6 位。已有账号直接点登录。':'New here? Choose Register. Username at least 2 characters, password at least 6. Already registered? Choose Sign in.';
-    if($('accountSettingHint'))$('accountSettingHint').textContent=zh?'还没登录。关注、提醒、模拟交易、策略、回测和设置需要先登录。':'Sign in before opening the watchlist, alerts, paper trading, strategy, backtest, or settings.';
-    leavePrivateTab();
+    if($('accountPop'))$('accountPop').hidden=true;
+    setAuthMode(authMode);
+    if($('accountSettingHint'))$('accountSettingHint').textContent=zh?'请先登录。':'Sign in first.';
   }
-  document.querySelectorAll('.nav-item').forEach(btn=>{const locked=AUTH_TABS.has(btn.dataset.tab)&&!currentUser;btn.classList.toggle('needs-login',locked);btn.title=locked?(zh?'请先登录':'Sign in required'):''});
 }
 function bindAccountUi(){
   if(bindAccountUi.done)return;bindAccountUi.done=true;
-  $('accountToggle').addEventListener('click',ev=>{ev.stopPropagation();$('accountPop').hidden=!$('accountPop').hidden;$('accountError').textContent=''});
-  $('accountPop').addEventListener('click',ev=>ev.stopPropagation());
-  document.addEventListener('click',()=>{if(loginPromptLock)return;const pop=$('accountPop');if(pop)pop.hidden=true});
-  $('accountLogin').addEventListener('click',()=>void submitAccount(false));
-  $('accountRegister').addEventListener('click',()=>void submitAccount(true));
-  $('accountLogout').addEventListener('click',()=>void logoutAccount());
-  $('accountPassword').addEventListener('keydown',ev=>{if(ev.key==='Enter')void submitAccount(false)});
+  $('authForm')?.addEventListener('submit',ev=>{ev.preventDefault();void submitAccount(authMode==='register')});
+  $('accountSwitch')?.addEventListener('click',()=>setAuthMode(authMode==='register'?'login':'register'));
+  $('accountToggle')?.addEventListener('click',ev=>{ev.stopPropagation();if(!currentUser)return;const pop=$('accountPop');if(pop)pop.hidden=!pop.hidden});
+  $('accountPop')?.addEventListener('click',ev=>ev.stopPropagation());
+  document.addEventListener('click',()=>{const pop=$('accountPop');if(pop)pop.hidden=true});
+  $('accountLogout')?.addEventListener('click',()=>void logoutAccount());
 }
 async function loadRemoteState(){
   const r=await fetch('/api/me/state',{credentials:'include',cache:'no-store',headers:{Accept:'application/json'}});
@@ -1057,7 +1071,8 @@ async function enterAccount(user,migrateGuest){
   else{resetLocalWorkspace();await pushUserState()}
   renderAccount();
   setLanguage(lang);
-  if(pendingAuthTab&&AUTH_TABS.has(pendingAuthTab)){const tab=pendingAuthTab;pendingAuthTab=null;activateTab(tab)}
+  setupAutoRefresh();
+  loadMarket();
   void refreshCommunityLeaderboard(false);
 }
 async function submitAccount(register){
@@ -1065,13 +1080,14 @@ async function submitAccount(register){
   err.textContent='';
   if(username.length<2){err.textContent=lang==='en'?'Enter a username':'请填写用户名';return}
   if(password.length<6){err.textContent=lang==='en'?'Password needs at least 6 characters':'密码至少 6 位';return}
+  if(register&&password!==$('accountPassword2').value){err.textContent=lang==='en'?'Passwords do not match':'两次输入的密码不一致';return}
   const previousId=currentUser&&currentUser.id;
   try{
     const r=await fetch(register?'/api/auth/register':'/api/auth/login',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({username,password,displayName:username})});
     const j=await r.json().catch(()=>({}));
     if(!r.ok){err.textContent=j.error||`HTTP ${r.status}`;return}
     $('accountPassword').value='';
-    $('accountPop').hidden=true;
+    if($('accountPassword2'))$('accountPassword2').value='';
     await enterAccount(j.user,!previousId);
     showToast(lang==='en'?(register?'Account created':'Signed in'):(register?'注册成功':'已登录'),j.user.displayName||j.user.username);
   }catch(e){err.textContent=String(e.message||e)}
@@ -1079,10 +1095,11 @@ async function submitAccount(register){
 async function logoutAccount(){
   try{await fetch('/api/auth/logout',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:'{}'})}catch{}
   currentUser=null;
+  authMode='login';
+  stopLiveBreakout();
   resetLocalWorkspace();
   renderAccount();
-  $('accountPop').hidden=true;
-  void refreshCommunityLeaderboard(false);
+  if($('accountPop'))$('accountPop').hidden=true;
   showToast(lang==='en'?'Signed out':'已退出','');
 }
 async function bootAccount(){
@@ -1095,7 +1112,8 @@ async function bootAccount(){
     }catch(e){console.warn('user state',e)}
   }
   renderAccount();
-  setLanguage(lang);startClock();setupAutoRefresh();renderNotificationState();void refreshCommunityLeaderboard(false);loadMarket();
+  setLanguage(lang);startClock();
+  if(currentUser){setupAutoRefresh();renderNotificationState();void refreshCommunityLeaderboard(false);loadMarket()}
 }
 
 $('langZh').addEventListener('click',()=>setLanguage('zh'));$('langEn').addEventListener('click',()=>setLanguage('en'));$('refreshBtn').addEventListener('click',loadMarket);$('resetFilters').addEventListener('click',resetFilters);['searchInput','minGain','minRvol','minVolume','rowCount'].forEach(id=>$(id).addEventListener(id==='searchInput'?'input':'change',()=>{renderTable();renderRuntimeStatus();scheduleUserSync()}));$('autoRefresh').addEventListener('change',()=>{setupAutoRefresh();scheduleUserSync()});$('breakoutAlerts').checked=localStorage.getItem('breakoutAlerts')!=='0';$('soundAlerts').checked=localStorage.getItem('soundAlerts')!=='0';$('alertConfirmThreshold').value=localStorage.getItem('alertConfirmThreshold')||'80';$('breakoutAlerts').addEventListener('change',()=>{localStorage.setItem('breakoutAlerts',$('breakoutAlerts').checked?'1':'0');scheduleUserSync()});$('alertConfirmThreshold').addEventListener('change',()=>{localStorage.setItem('alertConfirmThreshold',$('alertConfirmThreshold').value);evaluateAlerts();scheduleUserSync()});$('soundAlerts').addEventListener('change',()=>{localStorage.setItem('soundAlerts',$('soundAlerts').checked?'1':'0');scheduleUserSync()});$('clearAlerts').addEventListener('click',()=>{alertHistory=[];localStorage.setItem('scannerAlertHistory','[]');scheduleUserSync();renderSignals()});$('notificationBtn').addEventListener('click',requestNotify);$('newsApiKey').value=localStorage.getItem('newsApiKey')||'';$('saveNewsKey').addEventListener('click',()=>{localStorage.setItem('newsApiKey',$('newsApiKey').value.trim());scheduleUserSync();showToast(t('saved'),'News API')});$('runBacktest').addEventListener('click',runBacktest);setupSymbolAutocomplete();loadCommunityCache();$('leaderboardSort')?.addEventListener('change',()=>{renderStrategyLeaderboard();if(COMMUNITY_API)void refreshCommunityLeaderboard(false)});$('refreshLeaderboard')?.addEventListener('click',()=>void refreshCommunityLeaderboard(true));$('saveCommunityProfile')?.addEventListener('click',saveCommunityProfile);$('syncCommunityStrategy')?.addEventListener('click',()=>void syncCommunityStrategy());$('runWatchAll').addEventListener('click',runAllWatchEvaluations);$('paperAccessMode').addEventListener('change',()=>{paperAccount.accessMode=$('paperAccessMode').value;savePaperAccount();renderPaperAccessManager();renderPaperTrade();renderTable()});$('paperAutoBlockPoor').addEventListener('change',()=>{paperAccount.autoBlockPoor=$('paperAutoBlockPoor').checked;savePaperAccount();renderPaperTrade();renderTable();if(paperAccount.enabled)evaluatePaperTrading()});$('paperAddWhite').addEventListener('click',()=>updatePaperList($('paperListSymbol').value,'white'));$('paperAddBlack').addEventListener('click',()=>updatePaperList($('paperListSymbol').value,'black'));$('paperRemoveList').addEventListener('click',()=>updatePaperList($('paperListSymbol').value,'remove'));syncPaperControls();renderBacktestRule();$('paperAutoEnabled').addEventListener('change',()=>{paperAccount.enabled=$('paperAutoEnabled').checked;savePaperAccount();renderPaperTrade();renderTable();if(paperAccount.enabled)evaluatePaperTrading()});$('paperSaveConfig').addEventListener('click',savePaperConfigFromUI);$('paperReset').addEventListener('click',resetPaperAccount);$('paperCloseAll').addEventListener('click',paperCloseAll);document.addEventListener('pointerdown',()=>{if(audioCtx?.state==='suspended')audioCtx.resume().catch(()=>{})},{once:false});
