@@ -10,6 +10,10 @@ import json
 import os
 import secrets
 import sqlite3
+import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -24,6 +28,84 @@ COOKIE = "radar_session"
 SESSION_DAYS = 14
 MAX_BODY = 1_500_000
 SORT_KEYS = {"totalReturn", "return30d", "winRate", "maxDrawdown", "trades", "profitFactor"}
+HOT_PUSH_URL = os.environ.get("HOT_PUSH_URL", "https://alpha.c7.pro/bot/receive_hot").strip()
+HOT_PUSH_COOLDOWN_HOURS = max(1, int(os.environ.get("HOT_PUSH_COOLDOWN_HOURS", "6")))
+HOT_PUSH_TIMEOUT = max(10, int(os.environ.get("HOT_PUSH_TIMEOUT", "60")))
+HOT_PUSH_MIN_SCORE = float(os.environ.get("HOT_PUSH_MIN_SCORE", "75"))
+HOT_PUSH_MIN_CHANGE = float(os.environ.get("HOT_PUSH_MIN_CHANGE", "3"))
+HOT_PUSH_MIN_RVOL = float(os.environ.get("HOT_PUSH_MIN_RVOL", "1.2"))
+HOT_PUSH_MIN_VOLUME_M = float(os.environ.get("HOT_PUSH_MIN_VOLUME_M", "5"))
+HOT_PUSH_MAX_PER_SCAN = max(1, min(30, int(os.environ.get("HOT_PUSH_MAX_PER_SCAN", "12"))))
+_hot_push_lock = threading.Lock()
+_hot_push_inflight = set()
+
+
+def hot_push_config():
+    return {
+        "url": HOT_PUSH_URL,
+        "cooldownHours": HOT_PUSH_COOLDOWN_HOURS,
+        "timeout": HOT_PUSH_TIMEOUT,
+        "minScore": HOT_PUSH_MIN_SCORE,
+        "minChange": HOT_PUSH_MIN_CHANGE,
+        "minRvol": HOT_PUSH_MIN_RVOL,
+        "minVolumeM": HOT_PUSH_MIN_VOLUME_M,
+        "maxPerScan": HOT_PUSH_MAX_PER_SCAN,
+        "enabled": bool(HOT_PUSH_URL),
+    }
+
+
+def metric_float(value, default=0.0):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if number != number or number in (float("inf"), float("-inf")):
+        return default
+    return number
+
+
+def select_hot_symbols(payload):
+    """Accept either symbols=[], or coins=[{symbol,score,change,rvol,quoteVolume}]."""
+    coins = payload.get("coins")
+    if isinstance(coins, list):
+        ranked = []
+        min_volume = HOT_PUSH_MIN_VOLUME_M * 1_000_000
+        for item in coins:
+            if not isinstance(item, dict):
+                continue
+            symbol = normalize_hot_symbol(item.get("symbol") or "")
+            if not symbol:
+                continue
+            score = metric_float(item.get("score"))
+            change = metric_float(item.get("change"))
+            rvol = metric_float(item.get("rvol"))
+            volume = metric_float(item.get("quoteVolume") if item.get("quoteVolume") is not None else item.get("volume"))
+            if score < HOT_PUSH_MIN_SCORE:
+                continue
+            if change < HOT_PUSH_MIN_CHANGE:
+                continue
+            if rvol < HOT_PUSH_MIN_RVOL:
+                continue
+            if volume < min_volume:
+                continue
+            ranked.append((score, change, rvol, volume, symbol))
+        ranked.sort(key=lambda row: (row[0], row[1], row[2], row[3]), reverse=True)
+        out, seen = [], set()
+        for *_, symbol in ranked:
+            if symbol in seen:
+                continue
+            seen.add(symbol)
+            out.append(symbol)
+            if len(out) >= HOT_PUSH_MAX_PER_SCAN:
+                break
+        return out
+
+    symbols = payload.get("symbols")
+    if symbols is None and payload.get("symbol") is not None:
+        symbols = [payload.get("symbol")]
+    if not isinstance(symbols, list):
+        return None
+    return clean_hot_symbols(symbols)[:HOT_PUSH_MAX_PER_SCAN]
 
 
 def now_iso():
@@ -70,8 +152,141 @@ def init_db():
               snapshot_json TEXT NOT NULL,
               updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS hot_pushes (
+              symbol TEXT PRIMARY KEY COLLATE NOCASE,
+              pushed_at TEXT NOT NULL,
+              last_status TEXT,
+              last_error TEXT
+            );
             """
         )
+
+
+def normalize_hot_symbol(raw):
+    if not isinstance(raw, str):
+        return ""
+    name = raw.strip().upper().replace("/", "").replace("-", "")
+    if name.endswith("USDT"):
+        name = name[:-4]
+    if len(name) < 2 or len(name) > 20:
+        return ""
+    if not all(ch.isalnum() for ch in name):
+        return ""
+    return name
+
+
+def hot_push_due(conn, symbol):
+    row = conn.execute("SELECT pushed_at FROM hot_pushes WHERE symbol = ?", (symbol,)).fetchone()
+    if not row:
+        return True
+    try:
+        last = parse_iso(row["pushed_at"])
+    except ValueError:
+        return True
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - last >= timedelta(hours=HOT_PUSH_COOLDOWN_HOURS)
+
+
+def forward_hot_symbol(symbol):
+    if not HOT_PUSH_URL:
+        return False, "未配置 HOT_PUSH_URL"
+    body = urllib.parse.urlencode({"symbol": symbol}).encode("utf-8")
+    req = urllib.request.Request(
+        HOT_PUSH_URL,
+        data=body,
+        headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": "StrongCoinRadar/1.0"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=HOT_PUSH_TIMEOUT) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            status = resp.status
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        return False, f"HTTP {exc.code}: {raw[:200]}"
+    except Exception as exc:
+        return False, str(exc)
+    try:
+        payload = json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        payload = {}
+    ok = status < 400 and str(payload.get("status", "1")) in {"1", "true", "True", "ok"}
+    if ok or (status < 400 and "接收成功" in raw):
+        return True, raw[:240] or "ok"
+    return False, raw[:240] or f"HTTP {status}"
+
+
+def clean_hot_symbols(symbols):
+    cleaned, seen = [], set()
+    for item in symbols or []:
+        name = normalize_hot_symbol(item)
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        cleaned.append(name)
+    return cleaned
+
+
+def mark_hot_push(symbol, ok, detail):
+    with db() as conn:
+        if ok:
+            conn.execute(
+                """
+                INSERT INTO hot_pushes (symbol, pushed_at, last_status, last_error)
+                VALUES (?, ?, ?, NULL)
+                ON CONFLICT(symbol) DO UPDATE SET
+                  pushed_at = excluded.pushed_at,
+                  last_status = excluded.last_status,
+                  last_error = NULL
+                """,
+                (symbol, now_iso(), detail),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO hot_pushes (symbol, pushed_at, last_status, last_error)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(symbol) DO UPDATE SET
+                  last_status = excluded.last_status,
+                  last_error = excluded.last_error
+                """,
+                (symbol, "1970-01-01T00:00:00+00:00", "failed", detail),
+            )
+        conn.commit()
+
+
+def queue_hot_symbols(symbols):
+    cleaned = clean_hot_symbols(symbols)[:12]
+    queued, skipped = [], []
+    with _hot_push_lock:
+        with db() as conn:
+            for symbol in cleaned:
+                if symbol in _hot_push_inflight:
+                    skipped.append({"symbol": symbol, "reason": "pushing"})
+                    continue
+                if not hot_push_due(conn, symbol):
+                    skipped.append({"symbol": symbol, "reason": "cooldown"})
+                    continue
+                _hot_push_inflight.add(symbol)
+                queued.append(symbol)
+    if queued:
+        threading.Thread(target=_push_hot_worker, args=(list(queued),), daemon=True).start()
+    return {"queued": queued, "skipped": skipped, "cooldownHours": HOT_PUSH_COOLDOWN_HOURS}
+
+
+def _push_hot_worker(symbols):
+    for symbol in symbols:
+        try:
+            ok, detail = forward_hot_symbol(symbol)
+            mark_hot_push(symbol, ok, detail)
+            print(f"[hot-push] {'ok' if ok else 'fail'} {symbol} {detail[:120]}")
+        except Exception as exc:
+            mark_hot_push(symbol, False, str(exc))
+            print(f"[hot-push] error {symbol} {exc}")
+        finally:
+            with _hot_push_lock:
+                _hot_push_inflight.discard(symbol)
 
 
 def hash_password(password, salt=None):
@@ -304,6 +519,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             self.send_json({"ok": True})
             return
+        if path == "/api/hot/config":
+            self.send_json({"ok": True, "config": hot_push_config()})
+            return
         if path == "/api/auth/me":
             self.handle_me()
             return
@@ -341,6 +559,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/strategies/me/snapshot":
             self.handle_snapshot()
+            return
+        if path == "/api/hot/push":
+            self.handle_hot_push()
             return
         self.send_error_json(404, "没有这个地址")
 
@@ -510,6 +731,25 @@ class Handler(BaseHTTPRequestHandler):
             row = conn.execute("SELECT id FROM strategies WHERE user_id = ?", (user["id"],)).fetchone()
         self.send_json({"ok": True, "id": str(row["id"])})
 
+    def handle_hot_push(self):
+        data = self.read_json()
+        if data is None:
+            return
+        with db() as conn:
+            user = current_user(conn, self)
+            if not user:
+                self.send_error_json(401, "请先登录")
+                return
+        if not HOT_PUSH_URL:
+            self.send_error_json(503, "热币推送地址未配置")
+            return
+        symbols = select_hot_symbols(data)
+        if symbols is None:
+            self.send_error_json(400, "请提供 coins、symbol 或 symbols")
+            return
+        result = queue_hot_symbols(symbols)
+        self.send_json({"ok": True, "config": hot_push_config(), **result})
+
 
 def main():
     init_db()
@@ -518,6 +758,11 @@ def main():
     print(f"Strong Coin Radar http://{shown}:{PORT}/")
     print("A domain pointed at this host opens the app at /. Set PORT=80 to omit the port.")
     print(f"Database {DB_PATH}")
+    cfg = hot_push_config()
+    print(
+        f"Hot push {cfg['url'] or '(disabled)'} · cooldown {cfg['cooldownHours']}h · "
+        f"score>={cfg['minScore']} change>={cfg['minChange']}% rvol>={cfg['minRvol']}x vol>={cfg['minVolumeM']}M"
+    )
     httpd.serve_forever()
 
 
